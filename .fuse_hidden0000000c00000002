@@ -1,0 +1,36 @@
+# Deploying the Arc Souk Auction House (Remix)
+
+The auction (Bids) feature needs one smart contract deployed on **Arc Testnet**.
+You deploy it once with your **admin wallet**; that wallet becomes the owner and
+is the only one who can create / settle auctions and receives the USDC payouts.
+
+## Steps
+
+1. Open https://remix.ethereum.org
+2. Create a new file `ArcAuctionHouse.sol` and paste the contents of
+   `contracts/ArcAuctionHouse.sol` from this repo.
+3. **Solidity Compiler** tab → version `0.8.20` (or higher) → turn on *Enable optimization* → Compile.
+4. **Deploy & Run** tab:
+   - Environment: **Injected Provider - MetaMask** (make sure MetaMask is on **Arc Testnet**, chainId `5042002`, and you're using your admin wallet — the same one in `ADMIN_EMAILS`/your treasury).
+   - Next to **Deploy**, expand the constructor and set:
+     - `usdcToken` = `0xf8CF157c89bd49ECE128C2611F74af58bBd421A5`  (your `NEXT_PUBLIC_USDC_ADDRESS`)
+   - Click **Deploy**, confirm in MetaMask.
+5. Copy the deployed contract address.
+6. Set it as an env var (local `.env` **and** Vercel → Settings → Environment Variables):
+
+   ```
+   NEXT_PUBLIC_AUCTION_ADDRESS="0x...your deployed contract..."
+   ```
+
+7. Redeploy the site on Vercel (env changes need a redeploy). The Bids page goes live.
+
+## Important notes
+
+- **Owner = admin wallet.** Only the deploying wallet can call `createAuction` and
+  `settleAuction`. When you create or settle an auction from the admin panel, connect
+  **that same wallet**.
+- **USDC payouts** from won auctions are sent to the owner (your admin wallet).
+- Bidders must **approve USDC** before bidding — the site does this for them
+  (Approve → Bid, two transactions the first time).
+- The NFT image/metadata is served by your site at `/api/nft/<id>` and stored on-chain
+  as the token URI. Keep the site online so wallets can read it.

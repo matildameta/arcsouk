@@ -1,0 +1,176 @@
+// Arc Souk — Prisma schema
+// Postgres (Neon / Vercel Postgres). Configure DATABASE_URL in .env.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum OrderStatus {
+  AWAITING_PAYMENT
+  PAID
+  SHIPPED
+  CANCELLED
+}
+
+// ---------- Auth (NextAuth) ----------
+
+model User {
+  id              String    @id @default(cuid())
+  name            String?
+  email           String?   @unique
+  emailVerified   DateTime?
+  image           String?
+  passwordHash    String?
+  role            Role      @default(USER)
+  phone           String?
+  shippingAddress String?
+  walletAddress   String?
+  twitter         String?
+  discord         String?
+  createdAt       DateTime  @default(now())
+  accounts        Account[]
+  sessions        Session[]
+  orders          Order[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// One-time email login codes
+model EmailOtp {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+// ---------- Store ----------
+
+model Product {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  category    String
+  description String   @default("")
+  priceUsdc   Float
+  edition     String   @default("1 / 1")
+  inventory   Int      @default(1)
+  tone        String   @default("blue")
+  images      String[]
+  video       String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  orders      Order[]
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  orderRef        String      @unique
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id])
+  productId       String?
+  product         Product?    @relation(fields: [productId], references: [id])
+  amountUsdc      Float
+  status          OrderStatus @default(AWAITING_PAYMENT)
+  txHash          String?
+  buyerEmail      String?
+  shippingAddress String?
+  phone           String?
+  walletAddress   String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+// Optional content blocks rendered on the public site only when enabled + filled.
+model ContentBlock {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  title     String?
+  body      String?
+  image     String?
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+// Singleton row (id always "site") for editable site/about content + creator links.
+model SiteSettings {
+  id              String   @id @default("site")
+  aboutTitle      String?
+  aboutBody       String?  @db.Text
+  creatorName     String?
+  creatorEmail    String?
+  creatorX        String?
+  creatorTelegram String?
+  updatedAt       DateTime @updatedAt
+}
+
+enum AuctionStatus {
+  DRAFT
+  LIVE
+  SETTLED
+  CANCELLED
+}
+
+// Off-chain mirror of an on-chain auction (image/title/etc). Bid state lives on-chain.
+model Auction {
+  id          String        @id @default(cuid())
+  auctionId   Int?          // on-chain auction id (set after createAuction tx)
+  tokenId     Int?
+  title       String
+  description String        @default("")
+  image       String
+  startBid    Float         // human USDC
+  durationSec Int
+  endTime     DateTime?
+  txHash      String?
+  status      AuctionStatus @default(DRAFT)
+  winner      String?       // winning wallet, recorded at settle
+  winAmount   Float?
+  createdAt   DateTime      @default(now())
+
+  @@index([status])
+}
